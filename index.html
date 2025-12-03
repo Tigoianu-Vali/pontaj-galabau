@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>GreenTeam Ultimate</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;800&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --primary: #2ecc71;
+            --dark: #1e272e;
+            --glass: rgba(255, 255, 255, 0.85);
+            --glass-border: rgba(255, 255, 255, 0.5);
+            --shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+            --accent: #e67e22;
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            margin: 0; padding: 0;
+            /* Fundalul care ti-a placut */
+            background: url('https://images.unsplash.com/photo-1558904541-efa843a96f01?q=80&w=1000&auto=format&fit=crop') no-repeat center center fixed;
+            background-size: cover;
+            color: var(--dark);
+            height: 100vh;
+            display: flex; flex-direction: column;
+            overflow: hidden;
+        }
+
+        .backdrop {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.3); backdrop-filter: blur(4px); z-index: -1;
+        }
+
+        /* --- HEADER SMART --- */
+        .weather-widget {
+            background: rgba(255,255,255,0.9);
+            margin: 15px; padding: 15px;
+            border-radius: 20px;
+            display: flex; justify-content: space-between; align-items: center;
+            box-shadow: var(--shadow);
+            border-left: 5px solid var(--primary);
+            animation: slideDown 0.5s ease;
+        }
+        .greeting-text { font-size: 0.9rem; font-weight: bold; color: #444; margin-bottom: 2px; }
+        .temp-big { font-size: 1.8rem; font-weight: 800; color: var(--dark); }
+        .weather-info { font-size: 0.8rem; color: #666; text-align: right; }
+
+        /* --- PAGINI --- */
+        .page-container {
+            flex: 1; overflow-y: auto; padding: 0 15px 100px 15px;
+        }
+        .page { display: none; animation: fadeIn 0.4s; }
+        .page.active { display: block; }
+
+        /* --- STIL GLASSMORPHISM (Design-ul vechi) --- */
+        .glass-card {
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: var(--shadow);
+        }
+
+        /* Grid Angajati */
+        .team-grid {
+            display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+        }
+        .worker-btn {
+            background: rgba(255,255,255,0.6);
+            border: 2px solid transparent;
+            border-radius: 15px; padding: 10px 5px;
+            text-align: center; cursor: pointer; transition: 0.3s;
+        }
+        .worker-btn.selected {
+            background: #e8f5e9; border-color: var(--primary); transform: scale(1.05);
+            box-shadow: 0 5px 15px rgba(46, 204, 113, 0.3);
+        }
+        .worker-icon { font-size: 2.2rem; display: block; margin-bottom: 5px; }
+        .worker-name { font-weight: 600; font-size: 0.85rem; }
+
+        /* Timer Vizual */
+        .timer-circle {
+            width: 220px; height: 220px;
+            background: white; border-radius: 50%;
+            margin: 20px auto;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            border: 6px solid #eee;
+            transition: border-color 0.3s;
+        }
+        .timer-circle.active { border-color: var(--primary); }
+        .timer-circle.paused { border-color: var(--accent); }
+        
+        .time-text { font-size: 3rem; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; }
+        .status-badge { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 10px; font-weight: bold; }
+
+        /* Butoane */
+        .btn {
+            width: 100%; padding: 18px; border: none; border-radius: 15px;
+            font-size: 1.1rem; font-weight: 700; color: white; cursor: pointer;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2); transition: transform 0.1s;
+            display: flex; align-items: center; justify-content: center; gap: 10px;
+        }
+        .btn:active { transform: scale(0.98); }
+        .btn-start { background: linear-gradient(135deg, #2ecc71, #27ae60); }
+        .btn-pause { background: linear-gradient(135deg, #f1c40f, #f39c12); color: #333; }
+        .btn-stop { background: linear-gradient(135deg, #e74c3c, #c0392b); }
+
+        /* Calendar */
+        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; margin-top: 15px; }
+        .day-cell { 
+            background: rgba(255,255,255,0.7); aspect-ratio: 1; border-radius: 8px; 
+            display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 0.9rem; cursor: pointer;
+        }
+        .day-cell.today { border: 2px solid var(--accent); }
+        .day-cell.has-data { background: #c8e6c9; border: 1px solid var(--primary); color: #1b5e20; }
+
+        /* Navigare Jos */
+        .nav-bar {
+            position: fixed; bottom: 20px; left: 20px; right: 20px;
+            background: white; height: 70px; border-radius: 35px;
+            display: flex; justify-content: space-around; align-items: center;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3); z-index: 100;
+        }
+        .nav-item { font-size: 1.5rem; opacity: 0.5; transition: 0.2s; }
+        .nav-item.active { opacity: 1; transform: translateY(-5px); color: var(--primary); }
+
+        /* Modal */
+        .modal {
+            position: fixed; top:0; left:0; width:100%; height:100%;
+            background: rgba(0,0,0,0.8); z-index: 200; display: none;
+            justify-content: center; align-items: flex-end;
+        }
+        .modal-content {
+            background: white; width: 100%; border-top-left-radius: 25px; border-top-right-radius: 25px;
+            padding: 25px; max-height: 80vh; overflow-y: auto; animation: slideUp 0.3s;
+        }
+
+        /* Loader */
+        .loader-overlay {
+            position: fixed; top:0; left:0; width:100%; height:100%;
+            background: white; z-index: 999; display: flex; justify-content: center; align-items: center; flex-direction: column;
+        }
+
+        @keyframes slideDown { from{transform:translateY(-20px);opacity:0} to{transform:translateY(0);opacity:1}}
+        @keyframes slideUp { from{transform:translateY(100%)} to{transform:translateY(0)}}
+        @keyframes fadeIn { from{opacity:0} to{opacity:1}}
+    </style>
+</head>
+<body>
+
+    <div class="backdrop"></div>
+
+    <div id="app-loader" class="loader-overlay">
+        <img src="Galabau-Victor-Logo.png" style="width:100px; margin-bottom:20px;">
+        <div style="font-weight:bold; color:#555;">Se conectează la server...</div>
+    </div>
+
+    <div class="weather-widget">
+        <div>
+            <div class="greeting-text" id="smart-greet">Salut!</div>
+            <div style="display:flex; align-items:center; gap:10px;">
+                <span style="font-size:2rem;" id="w-icon">🌤️</span>
+                <div class="temp-big" id="w-temp">--°</div>
+            </div>
+            <div style="font-size:0.8rem; color:var(--accent); font-weight:bold; margin-top:5px;" id="w-msg"></div>
+        </div>
+        <div class="weather-info">
+            <div id="live-clock" style="font-size:1.2rem; font-weight:bold; color:var(--dark);">--:--</div>
+            <div id="w-loc">Se caută locația...</div>
+            <div id="current-date">--/--/----</div>
+        </div>
+    </div>
+
+    <div class="page-container">
+        
+        <div id="view-pontaj" class="page active">
+            
+            <div id="state-setup" class="glass-card">
+                <h3 style="margin-top:0;">Start Program</h3>
+                <div class="team-grid">
+                    <div class="worker-btn" onclick="selectUser(this, 'Sandu')"><span class="worker-icon">🧱</span><span class="worker-name">Sandu</span></div>
+                    <div class="worker-btn" onclick="selectUser(this, 'Nicu')"><span class="worker-icon">🏗️</span><span class="worker-name">Nicu</span></div>
+                    <div class="worker-btn" onclick="selectUser(this, 'Vadim')"><span class="worker-icon">⛏️</span><span class="worker-name">Vadim</span></div>
+                    <div class="worker-btn" onclick="selectUser(this, 'Sorin')"><span class="worker-icon">🚜</span><span class="worker-name">Sorin</span></div>
+                    <div class="worker-btn" onclick="selectUser(this, 'Fani')"><span class="worker-icon">🛠️</span><span class="worker-name">Fani</span></div>
+                    <div class="worker-btn" onclick="selectUser(this, 'Ovidiu')"><span class="worker-icon">🚛</span><span class="worker-name">Ovidiu</span></div>
+                </div>
+                
+                <input type="text" id="baustelle" placeholder="📍 Baustelle (Locație)" style="width:100%; padding:15px; margin-top:20px; border-radius:12px; border:1px solid #ddd; outline:none;">
+                
+                <button class="btn btn-start" onclick="startShift()" style="margin-top:20px;">
+                    🚀 START MUNCĂ
+                </button>
+            </div>
+
+            <div id="state-working" class="glass-card" style="display:none; text-align:center;">
+                <h2 id="display-name" style="margin:0;">Angajat</h2>
+                <p id="display-loc" style="color:#666; margin-top:5px;">Locație</p>
+                
+                <div class="timer-circle active" id="timer-ui">
+                    <span class="status-badge" id="status-text" style="color:var(--primary);">ÎN LUCRU</span>
+                    <span class="time-text" id="timer">00:00:00</span>
+                </div>
+
+                <button class="btn btn-pause" id="btn-pause" onclick="togglePause()" style="margin-bottom:10px;">
+                    ☕ IA O PAUZĂ
+                </button>
+                <button class="btn btn-stop" onclick="stopShift()">
+                    ⏹ FINALIZARE ZI
+                </button>
+            </div>
+        </div>
+
+        <div id="view-calendar" class="page">
+            <div class="glass-card">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <button onclick="changeMonth(-1)" style="border:none; background:none; font-size:1.5rem;">◀</button>
+                    <h3 id="cal-month-name" style="margin:0;">Luna</h3>
+                    <button onclick="changeMonth(1)" style="border:none; background:none; font-size:1.5rem;">▶</button>
+                </div>
+                
+                <div class="calendar-grid" id="calendar-days"></div>
+            </div>
+            
+            <div class="glass-card">
+                <h3>Total Ore (Luna Asta)</h3>
+                <div id="monthly-stats">Calculare...</div>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="nav-bar">
+        <div class="nav-item active" onclick="nav('pontaj')">⏱️</div>
+        <div class="nav-item" onclick="nav('calendar')">📅</div>
+    </div>
+
+    <div id="day-modal" class="modal" onclick="if(event.target == this) this.style.display='none'">
+        <div class="modal-content">
+            <h2 id="modal-date">Detalii</h2>
+            <div id="modal-list"></div>
+            <button class="btn" onclick="document.getElementById('day-modal').style.display='none'" style="background:#333; margin-top:20px;">Închide</button>
+        </div>
+    </div>
+
+    <script>
+        // --- 1. CONFIGURARE FIREBASE ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyDv8S2K9AFCg_Fx3egXxYoQGnTzICE68Zw",
+            authDomain: "greenteamapp.firebaseapp.com",
+            projectId: "greenteamapp",
+            storageBucket: "greenteamapp.firebasestorage.app",
+            messagingSenderId: "180497388022",
+            appId: "1:180497388022:web:c8383c7bfa4b352d4b37d7",
+            measurementId: "G-FE3SV8ZB1D"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        db.enablePersistence().catch(() => {}); // Activează Offline Mode
+
+        // --- 2. LOGICA SOLIDĂ (STATE MANAGEMENT) ---
+        let appState = {
+            user: null,
+            location: null,
+            startTime: null,      // Timestamp start
+            isPaused: false,
+            pauseStartTime: null, // Timestamp start pauza curenta
+            accumulatedPause: 0,  // Total ms pauza anterioară
+            docId: null
+        };
+        
+        let timerInterval;
+        let viewDate = new Date(); // Calendar
+
+        // --- 3. INIȚIALIZARE ---
+        window.onload = function() {
+            initSmartFeatures();
+            setInterval(updateClock, 1000); // Ceas live
+            
+            // Verificăm dacă există sesiune salvată (REPARARE BUG REFRESH)
+            const saved = localStorage.getItem('gt_session_solid');
+            if(saved) {
+                appState = JSON.parse(saved);
+                restoreUI();
+            }
+            
+            document.getElementById('app-loader').style.display = 'none';
+        };
+
+        // --- 4. FUNCȚII DE PONTAJ ---
+        function selectUser(el, name) {
+            document.querySelectorAll('.worker-btn').forEach(b => b.classList.remove('selected'));
+            el.classList.add('selected');
+            appState.user = name;
+        }
+
+        async function startShift() {
+            const loc = document.getElementById('baustelle').value;
+            if(!appState.user) return alert("⚠️ Alege numele!");
+            if(!loc) return alert("⚠️ Scrie locația!");
+
+            appState.location = loc;
+            appState.startTime = Date.now();
+            appState.isPaused = false;
+            appState.accumulatedPause = 0;
+
+            // Salvare Firebase
+            try {
+                const docRef = await db.collection('pontaje_v4').add({
+                    nume: appState.user,
+                    locatie: appState.location,
+                    start: firebase.firestore.Timestamp.fromMillis(appState.startTime),
+                    status: 'activ',
+                    luna: new Date().getMonth() + 1,
+                    an: new Date().getFullYear(),
+                    zi: new Date().getDate()
+                });
+                appState.docId = docRef.id;
+                saveState();
+                restoreUI();
+            } catch(e) { alert("Eroare conexiune. Încearcă iar."); }
+        }
+
+        function togglePause() {
+            const now = Date.now();
+            
+            if(!appState.isPaused) {
+                // START PAUZA
+                appState.isPaused = true;
+                appState.pauseStartTime = now;
+                db.collection('pontaje_v4').doc(appState.docId).update({ status: 'pauza' });
+            } else {
+                // STOP PAUZA
+                appState.isPaused = false;
+                // Calculăm cât a durat pauza asta și adăugăm la total
+                const pauseDuration = now - appState.pauseStartTime;
+                appState.accumulatedPause += pauseDuration;
+                appState.pauseStartTime = null;
+                db.collection('pontaje_v4').doc(appState.docId).update({ status: 'activ' });
+            }
+            saveState();
+            restoreUI();
+        }
+
+        async function stopShift() {
+            if(!confirm("Termini munca?")) return;
+
+            const now = Date.now();
+            let totalPauseFinal = appState.accumulatedPause;
+
+            // Dacă e oprit în timp ce e în pauză
+            if(appState.isPaused) {
+                totalPauseFinal += (now - appState.pauseStartTime);
+            }
+
+            const totalDuration = now - appState.startTime;
+            const workDuration = totalDuration - totalPauseFinal;
+            const hours = (workDuration / (1000 * 60 * 60)).toFixed(2);
+
+            await db.collection('pontaje_v4').doc(appState.docId).update({
+                stop: firebase.firestore.Timestamp.fromMillis(now),
+                ore: parseFloat(hours),
+                pauza_min: Math.round(totalPauseFinal / 60000),
+                status: 'finalizat'
+            });
+
+            localStorage.removeItem('gt_session_solid');
+            location.reload();
+        }
+
+        // --- 5. LOGICA VIZUALĂ (UI) ---
+        function restoreUI() {
+            // Ascunde setup, arata timer
+            document.getElementById('state-setup').style.display = 'none';
+            document.getElementById('state-working').style.display = 'block';
+            
+            document.getElementById('display-name').innerText = appState.user;
+            document.getElementById('display-loc').innerText = appState.location;
+
+            const btn = document.getElementById('btn-pause');
+            const status = document.getElementById('status-text');
+            const circle = document.getElementById('timer-ui');
+
+            if(appState.isPaused) {
+                btn.innerHTML = "▶ REIA MUNCA";
+                btn.style.background = "linear-gradient(135deg, #2ecc71, #27ae60)";
+                status.innerText = "ÎN PAUZĂ";
+                status.style.color = "#e67e22";
+                circle.classList.remove('active'); circle.classList.add('paused');
+            } else {
+                btn.innerHTML = "☕ IA O PAUZĂ";
+                btn.style.background = "linear-gradient(135deg, #f1c40f, #f39c12)";
+                status.innerText = "ÎN LUCRU";
+                status.style.color = "#2ecc71";
+                circle.classList.add('active'); circle.classList.remove('paused');
+            }
+
+            // Repornire bucla timer
+            if(timerInterval) clearInterval(timerInterval);
+            timerInterval = setInterval(updateTimerDisplay, 1000);
+            updateTimerDisplay(); // update imediat
+        }
+
+        function updateTimerDisplay() {
+            const now = Date.now();
+            let displayTime = 0;
+
+            if(appState.isPaused) {
+                // Timpul este înghețat vizual la momentul intrării în pauză
+                // Formula: (MomentPauza - Start) - TotalPauzeAnterioare
+                displayTime = appState.pauseStartTime - appState.startTime - appState.accumulatedPause;
+            } else {
+                // Timpul curge
+                // Formula: (Acum - Start) - TotalPauze
+                displayTime = now - appState.startTime - appState.accumulatedPause;
+            }
+
+            // Conversie ms -> HH:MM:SS
+            let s = Math.floor((displayTime / 1000) % 60);
+            let m = Math.floor((displayTime / (1000 * 60)) % 60);
+            let h = Math.floor((displayTime / (1000 * 60 * 60)));
+            
+            document.getElementById('timer').innerText = 
+                (h<10?"0"+h:h) + ":" + (m<10?"0"+m:m) + ":" + (s<10?"0"+s:s);
+        }
+
+        function saveState() {
+            localStorage.setItem('gt_session_solid', JSON.stringify(appState));
+        }
+
+        // --- 6. FUNCȚII SMART (Salut, Vreme, Ceas) ---
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('live-clock').innerText = 
+                now.toLocaleTimeString('ro-RO', {hour:'2-digit', minute:'2-digit'});
+            document.getElementById('current-date').innerText = now.toLocaleDateString('ro-RO');
+
+            const h = now.getHours();
+            const g = document.getElementById('smart-greet');
+            if(h < 11) g.innerText = "Bună dimineața! Spor la treabă.";
+            else if(h < 14) g.innerText = "Salut! Sper că mai puteți.";
+            else g.innerText = "Hai că știu că mai puteți!";
+        }
+
+        function initSmartFeatures() {
+            updateClock();
+            if(navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(async (pos) => {
+                    const lat = pos.coords.latitude; 
+                    const lon = pos.coords.longitude;
+                    try {
+                        // Nume sat
+                        const r1 = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=ro`);
+                        const d1 = await r1.json();
+                        document.getElementById('w-loc').innerText = "📍 " + (d1.locality || d1.city || "Locație");
+
+                        // Temperatura
+                        const r2 = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`);
+                        const d2 = await r2.json();
+                        const t = d2.current_weather.temperature;
+                        document.getElementById('w-temp').innerText = t + "°C";
+                        
+                        // Sfat
+                        const msg = document.getElementById('w-msg');
+                        if(t > 25) msg.innerText = "🔥 E cald! Hidratați-vă.";
+                        else if(t < 5) msg.innerText = "❄️ E frig! Atenție la echipament.";
+                        else msg.innerText = "✅ Vreme bună de muncă.";
+                        
+                    } catch(e) {}
+                });
+            }
+        }
+
+        // --- 7. CALENDAR ---
+        function nav(s) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+            
+            if(s === 'pontaj') {
+                document.getElementById('view-pontaj').classList.add('active');
+                document.querySelectorAll('.nav-item')[0].classList.add('active');
+            } else {
+                document.getElementById('view-calendar').classList.add('active');
+                document.querySelectorAll('.nav-item')[1].classList.add('active');
+                renderCal();
+                loadStats();
+            }
+        }
+
+        function changeMonth(d) { viewDate.setMonth(viewDate.getMonth()+d); renderCal(); }
+
+        async function renderCal() {
+            const grid = document.getElementById('calendar-days');
+            grid.innerHTML = "";
+            const year = viewDate.getFullYear();
+            const month = viewDate.getMonth(); // 0-11
+            const monthNames = ["Ianuarie","Februarie","Martie","Aprilie","Mai","Iunie","Iulie","August","Septembrie","Octombrie","Noiembrie","Decembrie"];
+            document.getElementById('cal-month-name').innerText = monthNames[month];
+
+            // Luăm datele din Firebase v4
+            const snaps = await db.collection('pontaje_v4')
+                .where('luna', '==', month + 1)
+                .where('an', '==', year)
+                .get();
+            
+            let dataMap = {};
+            snaps.forEach(doc => { dataMap[doc.data().zi] = true; });
+
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            const firstDay = new Date(year, month, 1).getDay();
+            const pad = firstDay === 0 ? 6 : firstDay - 1;
+
+            for(let i=0; i<pad; i++) grid.innerHTML += `<div></div>`;
+            for(let d=1; d<=daysInMonth; d++) {
+                const cls = dataMap[d] ? 'has-data' : '';
+                grid.innerHTML += `<div class="day-cell ${cls}" onclick="openDetails(${d})">${d}</div>`;
+            }
+        }
+
+        async function openDetails(day) {
+            if(!day) return;
+            const modal = document.getElementById('day-modal');
+            const list = document.getElementById('modal-list');
+            document.getElementById('modal-date').innerText = `Activitate ${day}/${viewDate.getMonth()+1}`;
+            modal.style.display = 'flex';
+            list.innerHTML = "Se încarcă...";
+
+            const snaps = await db.collection('pontaje_v4')
+                .where('zi', '==', day)
+                .where('luna', '==', viewDate.getMonth()+1)
+                .where('an', '==', viewDate.getFullYear())
+                .get();
+            
+            list.innerHTML = "";
+            if(snaps.empty) list.innerHTML = "Fără date.";
+
+            snaps.forEach(doc => {
+                const d = doc.data();
+                const start = d.start.toDate().toLocaleTimeString('ro-RO', {hour:'2-digit', minute:'2-digit'});
+                const stop = d.stop ? d.stop.toDate().toLocaleTimeString('ro-RO', {hour:'2-digit', minute:'2-digit'}) : "Activ";
+                
+                list.innerHTML += `
+                    <div style="border-bottom:1px solid #eee; padding:10px 0;">
+                        <strong>${d.nume}</strong> <small>(${d.locatie})</small><br>
+                        Interval: ${start} - ${stop}<br>
+                        <span style="color:var(--primary); font-weight:bold;">${d.ore || 0} ore</span>
+                        <small style="color:#666;"> (Pauză: ${d.pauza_min || 0} min)</small>
+                    </div>
+                `;
+            });
+        }
+
+        async function loadStats() {
+            const div = document.getElementById('monthly-stats');
+            div.innerHTML = "Calculare...";
+            
+            const snaps = await db.collection('pontaje_v4')
+                .where('luna', '==', viewDate.getMonth()+1)
+                .where('an', '==', viewDate.getFullYear())
+                .where('status', '==', 'finalizat')
+                .get();
+            
+            let totals = {};
+            snaps.forEach(doc => {
+                const d = doc.data();
+                if(!totals[d.nume]) totals[d.nume] = 0;
+                totals[d.nume] += d.ore;
+            });
+
+            div.innerHTML = "";
+            Object.keys(totals).forEach(key => {
+                div.innerHTML += `<div style="display:flex; justify-content:space-between; padding:5px 0;">
+                    <span>${key}</span> <strong>${totals[key].toFixed(2)}h</strong>
+                </div>`;
+            });
+        }
+    </script>
+</body>
+</html>
